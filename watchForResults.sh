@@ -161,10 +161,10 @@ while read dir action file; do
       ;;
     esac
     
-    title=$(echo "$s_type - $track_name")
+    output=$(echo "$s_type - $track_name")
     
     i=1
-    output="Leaderboard"
+    output="${output}\nLeaderboard"
     while read line; do
       name=$(echo $line | awk '{print $1" "$2}')
       car=$(echo $line | awk '{print $3}' | car_lookup)
@@ -201,9 +201,6 @@ while read dir action file; do
     ./discord.sh \
     --webhook-url=$WEBHOOK \
     --username "ACC Server Bot" \
-    --title "$title" \
-    --description "$output" \
-    --color "0xFFFFFF" \
-    --timestamp
+    --text "$output"
   fi
 done
