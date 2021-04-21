@@ -126,64 +126,84 @@ car_lookup(){
 function convert_time() {
   read foo
   seconds=$(echo "$foo / 1000" | bc -l)
-  printf '%i:%02i:%06.3f\n' $(dc -e "${seconds} d 3600 / n [ ] n d 60 / 60 % n [ ] n 60 % f") | awk -F\: '{print $2":"$3}'
+  printf '%i:%02i:%06.3f\n' $(dc -e "${seconds} d 3600 / n [ ] n d 60 / 60 % n [ ] n 60 % f") | awk -F\: '{print $2":"$3}' | sed -e "s/^00://"
 }
 
 inotifywait -m ${results_dir} -e create |
 while read dir action file; do
   echo "The file '$file' appeared in directory '$dir' via '$action'"
-
+  
   file_content=$(sed $'s/[^[:print:]\t]//g' ${dir}/${file})
-
+  
   track_name=$(jq -r '.trackName' <<< "$file_content")
   session_type=$(jq -r '.sessionType' <<< "$file_content")
   fastest_lap=$(jq -r '.sessionResult.bestlap' <<< "$file_content")
   driver_count=$(jq -c '.sessionResult.leaderBoardLines[]' <<< "$file_content" | wc -l)
-
-if [ "$driver_count" -ge "1" ]; then
-
-  case "$session_type" in
-    FP)
-    s_type="PRACTICE"
-    ;;
-    Q)
-    s_type="QUALIFYING"
-    ;;
-    R)
-    s_type="RACE"
-    ;;
-    *)
-    s_type="UNKNOWN"
-    ;;
-  esac
-
-  title=$(echo "$s_type - $track_name")
-
-  i=1
-  output="Leaderboard"
-  while read line; do
-    name=$(echo $line | awk '{print $1" "$2}')
-    car=$(echo $line | awk '{print $3}' | car_lookup)
-    ms=$(echo $line | awk '{print $4}')
-    time=$(echo $line | awk '{print $4}' | convert_time)
-    laps=$(echo $line | awk '{print $5}')
-    #Filter out stupidly long lap times from leaderboard
-    if [ "$ms" -le "300000" ]; then
-      if [ "$ms" -eq "$fastest_lap" ]; then
-        output="${output}\n $i - $name - $car - $time (FASTEST LAP) - $laps laps"
-      else
-        output="${output}\n $i - $name - $car - $time - $laps laps"
+  best_splits=$(jq -r '.sessionResult.bestSplits' <<< "$file_content")
+  best_split_1=$(echo $best_splits | awk '{print $2}' | awk -F, '{print $1}')
+  best_split_2=$(echo $best_splits | awk '{print $3}' | awk -F, '{print $1}')
+  best_split_3=$(echo $best_splits | awk '{print $4}' | awk -F, '{print $1}')
+  
+  if [ "$driver_count" -ge "1" ]; then
+    
+    case "$session_type" in
+      FP)
+      s_type="PRACTICE"
+      ;;
+      Q)
+      s_type="QUALIFYING"
+      ;;
+      R)
+      s_type="RACE"
+      ;;
+      *)
+      s_type="UNKNOWN"
+      ;;
+    esac
+    
+    title=$(echo "$s_type - $track_name")
+    
+    i=1
+    output="Leaderboard"
+    while read line; do
+      name=$(echo $line | awk '{print $1" "$2}')
+      car=$(echo $line | awk '{print $3}' | car_lookup)
+      ms=$(echo $line | awk '{print $4}')
+      time=$(echo $line | awk '{print $4}' | convert_time)
+      laps=$(echo $line | awk '{print $5}')
+      split1=$(echo $line | awk '{print $6}' | convert_time)
+      split1ms=$(echo $line | awk '{print $6}')
+      split2=$(echo $line | awk '{print $7}' | convert_time)
+      split2ms=$(echo $line | awk '{print $7}')
+      split3=$(echo $line | awk '{print $8}' | convert_time)
+      split3ms=$(echo $line | awk '{print $8}')
+      
+      if [ "$split1ms" -eq "$best_split_1" ]; then
+        split1="**$split1**"
       fi
-      let i++
-    fi
-  done<<<$(jq -c '.sessionResult.leaderBoardLines[]|[.currentDriver.firstName,.currentDriver.lastName,.car.carModel,.timing.bestLap,.timing.lapCount]' <<< "$file_content" | column -t -s'[],"')
-
-  ./discord.sh \
-  --webhook-url=$WEBHOOK \
-  --username "ACC Server Bot" \
-  --title "$title" \
-  --description "$output" \
-  --color "0xFFFFFF" \
-  --timestamp
-fi
+      if [ "$split2ms" -eq "$best_split_2" ]; then
+        split2="**$split2**"
+      fi
+      if [ "$split3ms" -eq "$best_split_3" ]; then
+        split3="**$split3**"
+      fi
+      #Filter out stupidly long lap times from leaderboard
+      if [ "$ms" -le "300000" ]; then
+        if [ "$ms" -eq "$fastest_lap" ]; then
+          output="${output}\n $i - $name - $car - **$time** :star: ($split1|$split2|$split3) - $laps laps"
+        else
+          output="${output}\n $i - $name - $car - $time ($split1|$split2|$split3) - $laps laps"
+        fi
+        let i++
+      fi
+    done<<<$(jq -c '.sessionResult.leaderBoardLines[]|[.currentDriver.firstName,.currentDriver.lastName,.car.carModel,.timing.bestLap,.timing.lapCount,.timing.bestSplits]' <<< "$file_content" | column -t -s'[],"')
+    
+    ./discord.sh \
+    --webhook-url=$WEBHOOK \
+    --username "ACC Server Bot" \
+    --title "$title" \
+    --description "$output" \
+    --color "0xFFFFFF" \
+    --timestamp
+  fi
 done
