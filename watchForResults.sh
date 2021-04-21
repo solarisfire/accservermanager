@@ -156,7 +156,6 @@ while read dir action file; do
   
   title=$(echo "$s_type - $track_name")
   
-  #echo $(jq '.' <<< "$file_content")
   i=1
   output="Leaderboard"
   while read line; do
