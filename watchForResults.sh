@@ -138,13 +138,13 @@ while read dir action file; do
   track_name=$(jq -r '.trackName' <<< "$file_content")
   session_type=$(jq -r '.sessionType' <<< "$file_content")
   fastest_lap=$(jq -r '.sessionResult.bestlap' <<< "$file_content")
-  driver_count=$(jq -c '.sessionResult.leaderBoardLines[]' <<< "$file_content" | wc -l)
+  lap_count=$(jq -c '.laps[]' <<< "$file_content" | wc -l)
   best_splits=$(jq -r '.sessionResult.bestSplits' <<< "$file_content")
   best_split_1=$(echo $best_splits | awk '{print $2}' | awk -F, '{print $1}')
   best_split_2=$(echo $best_splits | awk '{print $3}' | awk -F, '{print $1}')
   best_split_3=$(echo $best_splits | awk '{print $4}' | awk -F, '{print $1}')
   
-  if [ "$driver_count" -ge "1" ]; then
+  if [ "$lap_count" -ge "1" ]; then
     
     case "$session_type" in
       FP)
