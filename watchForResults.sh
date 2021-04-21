@@ -129,16 +129,19 @@ function convert_time() {
   printf '%i:%02i:%06.3f\n' $(dc -e "${seconds} d 3600 / n [ ] n d 60 / 60 % n [ ] n 60 % f") | awk -F\: '{print $2":"$3}'
 }
 
-inotifywait -m ${results_dir} -e create -e moved_to |
+inotifywait -m ${results_dir} -e create |
 while read dir action file; do
   echo "The file '$file' appeared in directory '$dir' via '$action'"
-  
-  file_content=$(sed $'s/[^[:print:]\t]//g' ${dir}${file})
-  
+
+  file_content=$(sed $'s/[^[:print:]\t]//g' ${dir}/${file})
+
   track_name=$(jq -r '.trackName' <<< "$file_content")
   session_type=$(jq -r '.sessionType' <<< "$file_content")
   fastest_lap=$(jq -r '.sessionResult.bestlap' <<< "$file_content")
-  
+  driver_count=$(jq -c '.sessionResult.leaderBoardLines[]' <<< "$file_content" | wc -l)
+
+if [ "$driver_count" -ge "1" ]; then
+
   case "$session_type" in
     FP)
     s_type="PRACTICE"
@@ -153,9 +156,9 @@ while read dir action file; do
     s_type="UNKNOWN"
     ;;
   esac
-  
+
   title=$(echo "$s_type - $track_name")
-  
+
   i=1
   output="Leaderboard"
   while read line; do
@@ -174,7 +177,7 @@ while read dir action file; do
       let i++
     fi
   done<<<$(jq -c '.sessionResult.leaderBoardLines[]|[.currentDriver.firstName,.currentDriver.lastName,.car.carModel,.timing.bestLap,.timing.lapCount]' <<< "$file_content" | column -t -s'[],"')
-  
+
   ./discord.sh \
   --webhook-url=$WEBHOOK \
   --username "ACC Server Bot" \
@@ -182,4 +185,5 @@ while read dir action file; do
   --description "$output" \
   --color "0xFFFFFF" \
   --timestamp
+fi
 done
